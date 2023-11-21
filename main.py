@@ -1,14 +1,19 @@
 import pytesseract
 import cv2
 import sys
-import imutils
-from PIL import Image
-from imutils.perspective import four_point_transform
-from skimage.segmentation import clear_border
 import numpy as np
+import imutils
+from imutils.perspective import four_point_transform
+import easyocr
 
 img = cv2.imread(sys.argv[1])
 
+
+def main():
+    board = find_sudoku_board(img)
+    board_without_grid = extract_grid(board)
+    get_numbers_from_board_pytesseract(board_without_grid)
+    # get_numbers_from_board_easyocr(board)
 
 def find_sudoku_board(image):
     grayscale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -34,10 +39,13 @@ def find_sudoku_board(image):
     output = image.copy()
     cv2.drawContours(output, [count], -1, (0, 255, 0), 2)
 
-    puzzle = four_point_transform(image, count.reshape(4, 2))
+    # puzzle = four_point_transform(image, count.reshape(4, 2))
     warped = four_point_transform(grayscale_image, count.reshape(4, 2))
+    return warped
 
-    bw = cv2.bitwise_not(warped)
+
+def extract_grid(image):
+    bw = cv2.bitwise_not(image)
 
     horizontal = bw.copy()
     vertical = bw.copy()
@@ -50,16 +58,31 @@ def find_sudoku_board(image):
     vertical = cv2.erode(vertical, vertical_structure)
     vertical = cv2.dilate(vertical, vertical_structure)
 
-    grid_extracted = cv2.add(warped, vertical)
+    grid_extracted = cv2.add(image, vertical)
     grid_extracted = cv2.add(grid_extracted, horizontal)
+    return grid_extracted
 
-    subImage = grid_extracted[0:int(grid_extracted.shape[0]*0.33*0.33), 0:int(grid_extracted.shape[1]*0.33*0.33)]
-    show_image(subImage)
 
-    custom_config = r' -l eng --oem 1 --psm 6  -c preserve_interword_spaces=1 -c tessedit_char_whitelist="0123456789 "'
-    extracted = pytesseract.image_to_string(subImage, config=custom_config)
+def get_numbers_from_board_pytesseract(image):
+    result_matrix = np.zeros((9, 9))
+    custom_config = r' -l eng --psm 6 -c preserve_interword_spaces=1 -c tessedit_char_whitelist="0123456789 "'
+    for x in range(9):
+        for y in range(9):
+            sub_image = image[
+                            int(x * image.shape[0] * 0.33 * 0.33):int((x + 1) * image.shape[0] * 0.33 * 0.33),
+                            int(y * image.shape[1] * 0.33 * 0.33):int((y + 1) * image.shape[1] * 0.33 * 0.33)
+                         ]
+            print(np.mean(sub_image))
+            # extracted = pytesseract.image_to_string(sub_image, config=custom_config)
+            # result_matrix[x, y] = int(extracted) if extracted != '' else 0
 
-    print(extracted)
+    print(result_matrix)
+
+
+def get_numbers_from_board_easyocr(image):
+    reader = easyocr.Reader(['ch_sim', 'en'], True)
+    result = reader.readtext(image, detail=0)
+    print(result)
 
 
 def show_image(image):
@@ -67,4 +90,4 @@ def show_image(image):
     cv2.waitKey(0)
 
 
-find_sudoku_board(img)
+main()
