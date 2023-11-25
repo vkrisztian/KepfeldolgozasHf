@@ -12,30 +12,35 @@ img = cv2.imread(sys.argv[1])
 
 def main():
     start_time = time.time()
-    board = find_sudoku_board(img)
-    board_without_grid = extract_grid(board)
-    (numbers, indices) = get_numbers_from_board_pytesseract(board_without_grid)
-    solved = solve_sudoku(numbers)
-    create_solution_file(solved, indices, board)
-    print("--- %s seconds ---" % (time.time() - start_time))
+    try:
+        (board, board_with_contour) = find_sudoku_board(img)
+        board_without_grid = extract_grid(board)
+        (numbers, indices) = get_numbers_from_board_pytesseract(board_without_grid)
+        solved = solve_sudoku(numbers)
+        create_solution_file(solved, indices, board, board_with_contour)
+        print("--- %s seconds ---" % (time.time() - start_time))
+    except UserWarning:
+        print("Cannot find sudoku board on Image!")
 
 
-def create_solution_file(solved, indices, image):
-    font_size = 35
-    for elem in indices:
-        x = elem[0]
-        y = elem[1]
-        x1 = int(x * image.shape[0] * 0.33 * 0.33)
-        x2 = int((x + 1) * image.shape[0] * 0.33 * 0.33)
-        y1 = int(y * image.shape[1] * 0.33 * 0.33)
-        y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
-        sub_image = image[x1:x2, y1:y2]
-        cv2.putText(sub_image, str(solved[x][y]), (int(sub_image.shape[0] / 3), int(sub_image.shape[1] / 1.1)),
-                    cv2.FONT_HERSHEY_SIMPLEX, (x2 - x1) / font_size, (0, 0, 0), 1,
-                    cv2.LINE_AA, False)
-
-    cv2.imwrite("solution.jpg", image)
-    # show_image(image)
+def create_solution_file(solved, indices, image, board_with_contour):
+    if len(indices) == 0:
+        show_image(board_with_contour)
+        cv2.imwrite("solution.jpg", image)
+    else:
+        font_size = 35
+        for elem in indices:
+            x = elem[0]
+            y = elem[1]
+            x1 = int(x * image.shape[0] * 0.33 * 0.33)
+            x2 = int((x + 1) * image.shape[0] * 0.33 * 0.33)
+            y1 = int(y * image.shape[1] * 0.33 * 0.33)
+            y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
+            sub_image = image[x1:x2, y1:y2]
+            cv2.putText(sub_image, str(solved[x][y]), (int(sub_image.shape[0] / 3), int(sub_image.shape[1] / 1.1)),
+                        cv2.FONT_HERSHEY_SIMPLEX, (x2 - x1) / font_size, (0, 0, 0), 1,
+                        cv2.LINE_AA, False)
+            cv2.imwrite("solution.jpg", image)
 
 
 def solve_sudoku(numbers):
@@ -68,14 +73,14 @@ def find_sudoku_board(image):
             break
 
         if count is None:
-            raise Exception("Cannot find sudoku board on image!")
+            raise UserWarning("Cannot find sudoku board on image!")
         break
 
     output = image.copy()
     cv2.drawContours(output, [count], -1, (0, 255, 0), 2)
-
+    show_image(output)
     warped = four_point_transform(grayscale_image, count.reshape(4, 2))
-    return warped
+    return warped, output
 
 
 def extract_grid(image):
@@ -98,6 +103,7 @@ def extract_grid(image):
 
 
 def get_numbers_from_board_pytesseract(image):
+    show_image(image)
     result_matrix = np.full((9, 9), -1)
     custom_config = r' -l eng --psm 6 -c tessedit_char_whitelist="0123456789"'
     font_size = 35
@@ -117,6 +123,7 @@ def get_numbers_from_board_pytesseract(image):
                             cv2.LINE_AA, True)
 
     extracted = pytesseract.image_to_string(image, config=custom_config)
+    print(extracted)
     return extracted, indices
 
 
