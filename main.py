@@ -4,7 +4,6 @@ import sys
 import numpy as np
 import imutils
 from imutils.perspective import four_point_transform
-import easyocr
 import time
 from sudoku import Sudoku
 
@@ -19,7 +18,6 @@ def main():
     solved = solve_sudoku(numbers)
     create_solution_file(solved, indices, board)
     print("--- %s seconds ---" % (time.time() - start_time))
-    # get_numbers_from_board_easyocr(board)
 
 
 def create_solution_file(solved, indices, image):
@@ -120,12 +118,6 @@ def get_numbers_from_board_pytesseract(image):
 
     extracted = pytesseract.image_to_string(image, config=custom_config)
     return extracted, indices
-
-
-def get_numbers_from_board_easyocr(image):
-    reader = easyocr.Reader(['ch_sim', 'en'], True)
-    result = reader.readtext(image, detail=0)
-    print(result)
 
 
 def show_image(image):
