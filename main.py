@@ -5,6 +5,8 @@ import numpy as np
 import imutils
 from imutils.perspective import four_point_transform
 import easyocr
+from sudoku import Sudoku
+
 
 img = cv2.imread(sys.argv[1])
 
@@ -14,6 +16,7 @@ def main():
     board_without_grid = extract_grid(board)
     get_numbers_from_board_pytesseract(board_without_grid)
     # get_numbers_from_board_easyocr(board)
+
 
 def find_sudoku_board(image):
     grayscale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -64,19 +67,25 @@ def extract_grid(image):
 
 
 def get_numbers_from_board_pytesseract(image):
-    result_matrix = np.zeros((9, 9))
-    custom_config = r' -l eng --psm 6 -c preserve_interword_spaces=1 -c tessedit_char_whitelist="0123456789 "'
+    result_matrix = np.full((9, 9), -1)
+    custom_config = r' -l eng --psm 6 -c tessedit_char_whitelist="0123456789"'
+    font_size = 35
     for x in range(9):
         for y in range(9):
-            sub_image = image[
-                            int(x * image.shape[0] * 0.33 * 0.33):int((x + 1) * image.shape[0] * 0.33 * 0.33),
-                            int(y * image.shape[1] * 0.33 * 0.33):int((y + 1) * image.shape[1] * 0.33 * 0.33)
-                         ]
-            print(np.mean(sub_image))
-            # extracted = pytesseract.image_to_string(sub_image, config=custom_config)
-            # result_matrix[x, y] = int(extracted) if extracted != '' else 0
+            x1 = int(x * image.shape[0] * 0.33 * 0.33)
+            x2 = int((x + 1) * image.shape[0] * 0.33 * 0.33)
+            y1 = int(y * image.shape[1] * 0.33 * 0.33)
+            y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
+            sub_image = image[x1:x2, y1:y2]
+            if np.mean(sub_image) > 254:
+                result_matrix[x][y] = 0
+                cv2.putText(sub_image, '0', (int(sub_image.shape[0]/3), int(sub_image.shape[1]/3)),
+                            cv2.FONT_HERSHEY_SIMPLEX, (x2-x1)/font_size, (0, 0, 0), 1,
+                            cv2.LINE_AA, True)
 
-    print(result_matrix)
+    show_image(image)
+    extracted = pytesseract.image_to_string(image, config=custom_config)
+    puzzle = 
 
 
 def get_numbers_from_board_easyocr(image):

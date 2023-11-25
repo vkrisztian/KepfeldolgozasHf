@@ -11,3 +11,5 @@ pytesseract==0.3.10
 scikit-image==0.22.0
 scipy==1.11.3
 tifffile==2023.9.26
+
+easyocr~=1.7.1
