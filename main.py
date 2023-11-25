@@ -6,6 +6,7 @@ import imutils
 from imutils.perspective import four_point_transform
 import time
 from sudoku import Sudoku
+from sudoku.sudoku import UnsolvableSudoku
 
 img = cv2.imread(sys.argv[1])
 
@@ -16,17 +17,21 @@ def main():
         (board, board_with_contour) = find_sudoku_board(img)
         board_without_grid = extract_grid(board)
         (numbers, indices) = get_numbers_from_board_pytesseract(board_without_grid)
-        solved = solve_sudoku(numbers)
-        create_solution_file(solved, indices, board, board_with_contour)
+        solution = solve_sudoku(numbers)
+        create_solution_file(solution, indices, board, board_with_contour)
         print("--- %s seconds ---" % (time.time() - start_time))
     except UserWarning:
         print("Cannot find sudoku board on Image!")
+    except Exception:
+        bordered = find_sudoku_board(img, (0, 0, 255))[1]
+        show_image(bordered)
+        cv2.imwrite("result.jpg", bordered)
 
 
-def create_solution_file(solved, indices, image, board_with_contour):
-    if len(indices) == 0:
+def create_solution_file(solution, indices, image, board_with_contour):
+    if len(indices) == 0 and solution.validate():
         show_image(board_with_contour)
-        cv2.imwrite("solution.jpg", image)
+        cv2.imwrite("result.jpg", board_with_contour)
     else:
         font_size = 35
         for elem in indices:
@@ -37,7 +42,7 @@ def create_solution_file(solved, indices, image, board_with_contour):
             y1 = int(y * image.shape[1] * 0.33 * 0.33)
             y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
             sub_image = image[x1:x2, y1:y2]
-            cv2.putText(sub_image, str(solved[x][y]), (int(sub_image.shape[0] / 3), int(sub_image.shape[1] / 1.1)),
+            cv2.putText(sub_image, str(solution.board[x][y]), (int(sub_image.shape[0] / 3), int(sub_image.shape[1] / 1.1)),
                         cv2.FONT_HERSHEY_SIMPLEX, (x2 - x1) / font_size, (0, 0, 0), 1,
                         cv2.LINE_AA, False)
             cv2.imwrite("solution.jpg", image)
@@ -50,12 +55,12 @@ def solve_sudoku(numbers):
         int_numbers.append(list(map(int, split[x])))
 
     puzzle = Sudoku(3, 3, int_numbers)
-    solution = puzzle.solve()
+    solution = puzzle.solve(raising=True)
     solution.show_full()
-    return solution.board
+    return solution
 
 
-def find_sudoku_board(image):
+def find_sudoku_board(image, color=(0, 255, 0)):
     grayscale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(grayscale_image, (7, 7), 3)
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
@@ -64,6 +69,9 @@ def find_sudoku_board(image):
     contours = imutils.grab_contours(contours)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
     count = None
+
+    output = image.copy()
+
     for c in contours:
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.02 * peri, True)
@@ -76,9 +84,8 @@ def find_sudoku_board(image):
             raise UserWarning("Cannot find sudoku board on image!")
         break
 
-    output = image.copy()
-    cv2.drawContours(output, [count], -1, (0, 255, 0), 2)
-    show_image(output)
+    cv2.drawContours(output, [count], -1, color, 2)
+
     warped = four_point_transform(grayscale_image, count.reshape(4, 2))
     return warped, output
 
@@ -103,7 +110,6 @@ def extract_grid(image):
 
 
 def get_numbers_from_board_pytesseract(image):
-    show_image(image)
     result_matrix = np.full((9, 9), -1)
     custom_config = r' -l eng --psm 6 -c tessedit_char_whitelist="0123456789"'
     font_size = 35
