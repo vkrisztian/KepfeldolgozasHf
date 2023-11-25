@@ -5,17 +5,51 @@ import numpy as np
 import imutils
 from imutils.perspective import four_point_transform
 import easyocr
+import time
 from sudoku import Sudoku
-
 
 img = cv2.imread(sys.argv[1])
 
 
 def main():
+    start_time = time.time()
     board = find_sudoku_board(img)
     board_without_grid = extract_grid(board)
-    get_numbers_from_board_pytesseract(board_without_grid)
+    (numbers, indices) = get_numbers_from_board_pytesseract(board_without_grid)
+    solved = solve_sudoku(numbers)
+    create_solution_file(solved, indices, board)
+    print("--- %s seconds ---" % (time.time() - start_time))
     # get_numbers_from_board_easyocr(board)
+
+
+def create_solution_file(solved, indices, image):
+    font_size = 35
+    for elem in indices:
+        x = elem[0]
+        y = elem[1]
+        x1 = int(x * image.shape[0] * 0.33 * 0.33)
+        x2 = int((x + 1) * image.shape[0] * 0.33 * 0.33)
+        y1 = int(y * image.shape[1] * 0.33 * 0.33)
+        y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
+        sub_image = image[x1:x2, y1:y2]
+        cv2.putText(sub_image, str(solved[x][y]), (int(sub_image.shape[0] / 3), int(sub_image.shape[1] / 1.1)),
+                    cv2.FONT_HERSHEY_SIMPLEX, (x2 - x1) / font_size, (0, 0, 0), 1,
+                    cv2.LINE_AA, False)
+
+    cv2.imwrite("solution.jpg", image)
+    # show_image(image)
+
+
+def solve_sudoku(numbers):
+    int_numbers = []
+    split = numbers.split('\n')
+    for x in range(9):
+        int_numbers.append(list(map(int, split[x])))
+
+    puzzle = Sudoku(3, 3, int_numbers)
+    solution = puzzle.solve()
+    solution.show_full()
+    return solution.board
 
 
 def find_sudoku_board(image):
@@ -42,7 +76,6 @@ def find_sudoku_board(image):
     output = image.copy()
     cv2.drawContours(output, [count], -1, (0, 255, 0), 2)
 
-    # puzzle = four_point_transform(image, count.reshape(4, 2))
     warped = four_point_transform(grayscale_image, count.reshape(4, 2))
     return warped
 
@@ -70,6 +103,7 @@ def get_numbers_from_board_pytesseract(image):
     result_matrix = np.full((9, 9), -1)
     custom_config = r' -l eng --psm 6 -c tessedit_char_whitelist="0123456789"'
     font_size = 35
+    indices = []
     for x in range(9):
         for y in range(9):
             x1 = int(x * image.shape[0] * 0.33 * 0.33)
@@ -78,14 +112,14 @@ def get_numbers_from_board_pytesseract(image):
             y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
             sub_image = image[x1:x2, y1:y2]
             if np.mean(sub_image) > 254:
+                indices.append((x, y))
                 result_matrix[x][y] = 0
-                cv2.putText(sub_image, '0', (int(sub_image.shape[0]/3), int(sub_image.shape[1]/3)),
-                            cv2.FONT_HERSHEY_SIMPLEX, (x2-x1)/font_size, (0, 0, 0), 1,
+                cv2.putText(sub_image, '0', (int(sub_image.shape[0] / 3), int(sub_image.shape[1] / 3)),
+                            cv2.FONT_HERSHEY_SIMPLEX, (x2 - x1) / font_size, (0, 0, 0), 1,
                             cv2.LINE_AA, True)
 
-    show_image(image)
     extracted = pytesseract.image_to_string(image, config=custom_config)
-    puzzle = 
+    return extracted, indices
 
 
 def get_numbers_from_board_easyocr(image):
