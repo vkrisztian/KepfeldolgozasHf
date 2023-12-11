@@ -19,24 +19,23 @@ def main():
         board_without_grid = extract_grid(board)
         # Számok kiolvasása OCR segítségével
         (numbers, indices) = get_numbers_from_board_pytesseract(board_without_grid)
+        # (numbers, indices) = get_numbers_from_board_pytesseract_by_cell(board_without_grid)
         # Sudoku megoldása
         solution = solve_sudoku(numbers)
         # Eredmény elmentése
-        create_solution_file(solution, indices, board, board_with_contour)
+        create_solution_file(solution, indices, board, board_with_contour, board_without_grid)
         print("--- %s seconds ---" % (time.time() - start_time))
     except UserWarning:
         print("Cannot find sudoku board on Image!")
     except Exception as err:
         # Amennyiben a sudoku board invalid hibát kapunk bekeretezzük pirossal a táblát és lementjük
         bordered = find_sudoku_board(img, (0, 0, 255))[1]
-        show_image(bordered)
         cv2.imwrite("result.jpg", bordered)
 
 
-def create_solution_file(solution, indices, image, board_with_contour):
+def create_solution_file(solution, indices, image, board_with_contour, board_without_grid):
     # ha ki volt töltve, ide már csak akkor jutunk ha helyes, zöld kerettel elmentjük a táblát
     if len(indices) == 0 and solution.validate():
-        show_image(board_with_contour)
         cv2.imwrite("result.jpg", board_with_contour)
     else:
         font_size = 35
@@ -48,13 +47,13 @@ def create_solution_file(solution, indices, image, board_with_contour):
             x2 = int((x + 1) * image.shape[0] * 0.33 * 0.33)
             y1 = int(y * image.shape[1] * 0.33 * 0.33)
             y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
-            sub_image = image[x1:x2, y1:y2]
+            sub_image = board_without_grid[x1:x2, y1:y2]
             # kiolvassuk a megoldásból a megfelelő cellát és kiírjuk a képen a megfelelő helyre
             cv2.putText(sub_image, str(solution.board[x][y]), (int(sub_image.shape[0] / 3), int(sub_image.shape[1] / 1.1)),
                         cv2.FONT_HERSHEY_SIMPLEX, (x2 - x1) / font_size, (0, 0, 0), 1,
                         cv2.LINE_AA, False)
 
-        cv2.imwrite("solution.jpg", image)
+        cv2.imwrite("solution.jpg", board_without_grid)
 
 
 def solve_sudoku(numbers):
@@ -124,6 +123,7 @@ def extract_grid(image):
     vertical_structure = cv2.getStructuringElement(cv2.MORPH_RECT, (35, 1))
     vertical = cv2.erode(vertical, vertical_structure)
     vertical = cv2.dilate(vertical, vertical_structure)
+
     # képek összeadása
     grid_extracted = cv2.add(image, vertical)
     # képek összadása
@@ -131,7 +131,8 @@ def extract_grid(image):
     return grid_extracted
 
 
-def get_numbers_from_board_pytesseract(image):
+def get_numbers_from_board_pytesseract(board_without_grid):
+    image = board_without_grid.copy()
     result_matrix = np.full((9, 9), -1)
     # OCR config
     custom_config = r' -l eng --psm 6 -c tessedit_char_whitelist="0123456789"'
@@ -158,6 +159,32 @@ def get_numbers_from_board_pytesseract(image):
     extracted = pytesseract.image_to_string(image, config=custom_config)
     print(extracted)
     return extracted, indices
+
+
+# ez a metódus cellánként próbálja meg kiolvasni az értéket
+def get_numbers_from_board_pytesseract_by_cell(image):
+    result_matrix = np.full((9, 9), -1)
+    # OCR config
+    custom_config = r' -l eng --psm 10 -c tessedit_char_whitelist="0123456789"'
+    indices = []
+    for x in range(9):
+        for y in range(9):
+            x1 = int(x * image.shape[0] * 0.33 * 0.33)
+            x2 = int((x + 1) * image.shape[0] * 0.33 * 0.33)
+            y1 = int(y * image.shape[1] * 0.33 * 0.33)
+            y2 = int((y + 1) * image.shape[1] * 0.33 * 0.33)
+            # sudoku tábla egy cellája
+            sub_image = image[x1:x2, y1:y2]
+            (_, thresh) = cv2.threshold(sub_image, 170, 255, cv2.THRESH_BINARY)
+            extracted = pytesseract.image_to_string(sub_image, config=custom_config)
+            if extracted == '' or extracted == ' ':
+                result_matrix[x][y] = 0
+            else:
+                result_matrix[x][y] = int(extracted)
+            indices.append((x,y))
+
+    print(result_matrix)
+    return result_matrix, indices
 
 
 def show_image(image):
